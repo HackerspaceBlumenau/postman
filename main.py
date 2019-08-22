@@ -7,7 +7,8 @@ import io, email
 import sys
 import os
 
-def get_emails():
+def get_emails(trigger):
+    print(trigger)
     PROJECT_ID = os.environ["PROJECT_ID"]
 
     # firestore setup
