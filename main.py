@@ -19,6 +19,7 @@ def get_emails(trigger):
     cred_content = base64.b64decode(PUB_SUB_CREDENTIALS )
     cred_file.write(cred_content.decode("utf-8"))
     cred_file.close()
+    log.debug("saved credentials to {}".format(CREDENTIALS_FILE))
 
     PROJECT_ID = os.environ["PROJECT_ID"]
     TOPIC_NAME = os.environ["TOPIC_NAME"]
