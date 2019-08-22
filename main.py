@@ -6,14 +6,14 @@ from datetime import datetime
 from google.cloud import pubsub_v1
 import slack
 
-def send_messages_to_slack(trigger):
+def send_messages_to_slack(trigger, content):
     log.basicConfig(level=log.DEBUG)
 
     # log trigger content
-    log.debug(trigger)
+    log.debug(trigger, content)
 
     # translate message
-    msg = json.loads(trigger)
+    msg = json.loads(content)
     if not "category" in msg:
         log.info("ignoring message without category key")
         return
@@ -160,4 +160,4 @@ def get_emails(trigger):
 
 if __name__ == "__main__":
     get_emails(None)
-    send_messages_to_slack(b'{"from":"Jonathan <jonathan@codeep.blue","subject":"Assunto Aqui!","category":"misc","body":"Hello World!"}')
+    send_messages_to_slack(b'{"from":"User <user@example.org","subject":"Subject Example","category":"misc","body":"Hello World!"}')
