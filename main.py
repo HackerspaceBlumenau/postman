@@ -4,6 +4,61 @@ from imaplib import IMAP4_SSL
 from email.utils import parsedate_to_datetime
 from datetime import datetime
 from google.cloud import pubsub_v1
+import slack
+
+def send_messages_to_slack(trigger):
+    log.basicConfig(level=log.DEBUG)
+
+    # log trigger content
+    log.debug(trigger)
+
+    # translate message
+    msg = json.loads(trigger)
+    if not "category" in msg:
+        log.info("ignoring message without category key")
+        return
+
+    category = msg["category"]
+
+    if not "body" in msg:
+        log.info("ignoring message without body key")
+        return
+
+    body = msg["body"]
+
+    _from = ""
+    if "from" in msg:
+        _from = msg["from"]
+
+    subject = ""
+    if "subject" in msg:
+        subject = msg["subject"]
+
+    # convert category map
+    SLACK_CATEGORY_MAP = os.environ["SLACK_CATEGORY_MAP"]
+    category_map = json.loads(base64.b64decode(SLACK_CATEGORY_MAP))
+    if not category in category_map:
+        log.info("ignoring not routed category {}".format(category))
+        return
+
+    channels = category_map[msg["category"]]
+
+    slack_message = ""
+    if _from != "":
+        slack_message += "*De:* {}".format(_from)
+    if subject != "":
+        slack_message += "\n*Assunto:* {}".format(subject)
+    slack_message += "\n```{}```".format(body)
+
+    SLACK_API_TOKEN = os.environ["SLACK_API_TOKEN"]
+    client = slack.WebClient(token=SLACK_API_TOKEN)
+    for channel in channels:
+        response = client.chat_postMessage(
+            icon_emoji=":capivara:",
+            channel=channel,
+            text=slack_message)
+
+        assert response["ok"]
 
 def get_emails(trigger):
     log.basicConfig(level=log.DEBUG)
@@ -56,13 +111,13 @@ def get_emails(trigger):
         message = email.message_from_bytes(data[0][1])
 
         date = parsedate_to_datetime(message.get("Date"))
-        if date.date() < datetime.today().date():
-            log.info("ignoring old message")
-            continue
+        #if date.date() < datetime.today().date():
+        #    log.info("ignoring old message")
+        #    continue
 
-        if date.hour != datetime.now().hour:
-            log.info("ignoring old message")
-            continue
+        #if date.hour != datetime.now().hour:
+        #    log.info("ignoring old message")
+        #    continue
 
         # body
         body = None
@@ -105,3 +160,4 @@ def get_emails(trigger):
 
 if __name__ == "__main__":
     get_emails(None)
+    send_messages_to_slack(b'{"from":"Jonathan <jonathan@codeep.blue","subject":"Assunto Aqui!","category":"misc","body":"Hello World!"}')
