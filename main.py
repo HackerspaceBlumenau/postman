@@ -1,11 +1,9 @@
-import string, random, io, email, sys, os, base64, re
+import string, random, io, email, sys, os, base64, re, json
 import logging as log
 from imaplib import IMAP4_SSL
 from email.utils import parsedate_to_datetime
 from datetime import datetime
-import firebase_admin
-from firebase_admin import credentials
-from firebase_admin import firestore
+from google.cloud import pubsub_v1
 
 def get_emails(trigger):
     log.basicConfig(level=log.DEBUG)
@@ -13,25 +11,21 @@ def get_emails(trigger):
     # log trigger
     log.debug(trigger)
 
-    FIREBASE_CREDENTIALS = os.environ["FIREBASE_CREDENTIALS"]
+    PUB_SUB_CREDENTIALS = os.environ["GOOGLE_PUB_SUB_CREDENTIALS"]
+    CREDENTIALS_FILE = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
 
-    # save firebase credentials to temporarly file
-    cred_file_path = "/tmp/firebase_credentials.json"
-    cred_file = open(cred_file_path, "w+")
-    cred_content = base64.b64decode(FIREBASE_CREDENTIALS)
+    # save credentials to temporarly file
+    cred_file = open(CREDENTIALS_FILE , "w+")
+    cred_content = base64.b64decode(PUB_SUB_CREDENTIALS )
     cred_file.write(cred_content.decode("utf-8"))
     cred_file.close()
 
     PROJECT_ID = os.environ["PROJECT_ID"]
+    TOPIC_NAME = os.environ["TOPIC_NAME"]
 
-    # firebase setup
-    cred = credentials.Certificate(cred_file_path)
-    firebase_admin.initialize_app(cred, {
-      'projectId': PROJECT_ID,
-    })
-
-    db = firestore.client()
-    emails = db.collection(u'emails')
+    # setup client
+    publisher = pubsub_v1.PublisherClient()
+    topic_path = publisher.topic_path(PROJECT_ID, TOPIC_NAME)
 
     SERVER = os.environ["IMAP_SERVER"]
     PORT = os.environ["IMAP_PORT"]
@@ -62,6 +56,10 @@ def get_emails(trigger):
 
         date = parsedate_to_datetime(message.get("Date"))
         if date.date() < datetime.today().date():
+            log.info("ignoring old message")
+            continue
+
+        if date.hour != datetime.now().hour:
             log.info("ignoring old message")
             continue
 
@@ -97,8 +95,9 @@ def get_emails(trigger):
             if email_message["subject"].lower() == "vaga":
                 email_message["category"] = "job"
 
-            # save in firestore
-            emails.document(email_message["id"]).set(email_message)
+            # send to publisher
+            publish_message = bytes(json.dumps(email_message, indent=4, sort_keys=True, default=str), "utf-8")
+            publisher.publish(topic_path, data=publish_message)
 
     server.close()
     server.logout()

@@ -1,1 +1,1 @@
-firebase-admin
+google-cloud-pubsub
