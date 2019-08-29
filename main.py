@@ -3,20 +3,13 @@ import logging as log
 from imaplib import IMAP4_SSL
 from email.utils import parsedate_to_datetime
 from datetime import datetime
-from google.cloud import pubsub_v1
 import slack
 
-def send_messages_to_slack(event, context):
+def send_messages_to_slack(msg):
     log.basicConfig(level=log.DEBUG)
 
-    # log event and context
-    log.debug(event, context)
-
-    # translate message
-    msg = json.loads(base64.b64decode(event['data']).decode('utf-8'))
-    if not "category" in msg:
-        log.info("ignoring message without category key")
-        return
+    # log message
+    log.debug(msg)
 
     category = msg["category"]
 
@@ -60,29 +53,13 @@ def send_messages_to_slack(event, context):
 
         assert response["ok"]
 
-def get_emails(trigger):
+def run(trigger):
     log.basicConfig(level=log.DEBUG)
 
     # log trigger
     log.debug(trigger)
 
-    PUB_SUB_CREDENTIALS = os.environ["GOOGLE_PUB_SUB_CREDENTIALS"]
-    CREDENTIALS_FILE = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
-
-    # save credentials to temporarly file
-    cred_file = open(CREDENTIALS_FILE , "w+")
-    cred_content = base64.b64decode(PUB_SUB_CREDENTIALS )
-    cred_file.write(cred_content.decode("utf-8"))
-    cred_file.close()
-    log.debug("saved credentials to {}".format(CREDENTIALS_FILE))
-
-    PROJECT_ID = os.environ["PROJECT_ID"]
-    TOPIC_NAME = os.environ["TOPIC_NAME"]
-
     # setup client
-    publisher = pubsub_v1.PublisherClient()
-    topic_path = publisher.topic_path(PROJECT_ID, TOPIC_NAME)
-
     SERVER = os.environ["IMAP_SERVER"]
     PORT = os.environ["IMAP_PORT"]
     USER = os.environ["IMAP_USER"]
@@ -101,9 +78,10 @@ def get_emails(trigger):
     log.info("set to SELECTED state")
 
     # list items on server
-    typ, data = server.search(None, 'ALL')
+    typ, data = server.search(None, '(UNSEEN)')
     log.info("got list of emails")
 
+    messages_to_send = []
     split = data[0].split()
     for num in split:
         log.info("processing message {} from {}".format(num.decode("utf-8"), len(split)))
@@ -111,13 +89,6 @@ def get_emails(trigger):
         message = email.message_from_bytes(data[0][1])
 
         date = parsedate_to_datetime(message.get("Date"))
-        #if date.date() < datetime.today().date():
-        #    log.info("ignoring old message")
-        #    continue
-
-        #if date.hour != datetime.now().hour:
-        #    log.info("ignoring old message")
-        #    continue
 
         # body
         body = None
@@ -139,7 +110,8 @@ def get_emails(trigger):
             cleanhtml = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
             body = re.sub(cleanhtml, '', body)
             email_message = {
-                    "id": message.get("Message-Id"),
+                    "id": num,
+                    "message_id": message.get("Message-Id"),
                     "from": message.get("From"),
                     "subject": message.get("Subject"),
                     "date": date,
@@ -151,13 +123,18 @@ def get_emails(trigger):
             if email_message["subject"].lower() == "vaga":
                 email_message["category"] = "job"
 
-            # send to publisher
-            publish_message = bytes(json.dumps(email_message, indent=4, sort_keys=True, default=str), "utf-8")
-            publisher.publish(topic_path, data=publish_message)
+            messages_to_send.append(email_message)
+
+    if len(messages_to_send) == 0:
+        log.info("no new message")
+        return
+
+    for email_message in messages_to_send:
+        send_messages_to_slack(email_message)
+        server.uid('STORE', num, '+FLAGS', '(\Seen)')
 
     server.close()
     server.logout()
 
 if __name__ == "__main__":
-    get_emails(None)
-    #send_messages_to_slack(b'{"from":"User <user@example.org","subject":"Subject Example","category":"misc","body":"Hello World!"}')
+    run(None)
