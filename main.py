@@ -53,11 +53,10 @@ def send_messages_to_slack(msg):
 
         assert response["ok"]
 
-def run(trigger):
+def run(*args):
     log.basicConfig(level=log.DEBUG)
 
-    # log trigger
-    log.debug(trigger)
+    log.debug(args)
 
     # setup client
     SERVER = os.environ["IMAP_SERVER"]
@@ -137,4 +136,4 @@ def run(trigger):
     server.logout()
 
 if __name__ == "__main__":
-    run(None)
+    run()
