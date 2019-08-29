@@ -39,6 +39,7 @@ Check your workspace in channels that you map using the SLACK_CATEGORY_MAP envir
 List of supported categories
 
 "job" = When subject is equal to "vaga"
+
 "misc" = All others categories
 
 ### Maintainers
