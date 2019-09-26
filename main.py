@@ -119,7 +119,7 @@ def run(*args):
             }
 
             # category
-            if email_message["subject"].lower() == "vaga":
+            if "vaga" in email_message["subject"].lower():
                 email_message["category"] = "job"
 
             messages_to_send.append(email_message)
