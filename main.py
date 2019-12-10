@@ -17,7 +17,7 @@ def send_messages_to_slack(msg):
         log.info("ignoring message without body key")
         return
 
-    body = msg["body"]
+    body = msg["body"][:256] + "..."
 
     _from = ""
     if "from" in msg:
