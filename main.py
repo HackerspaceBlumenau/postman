@@ -1,9 +1,14 @@
-import string, random, io, email, sys, os, base64, re, json
+import base64
+import email
+import json
 import logging as log
-from imaplib import IMAP4_SSL
+import os
+import re
 from email.utils import parsedate_to_datetime
-from datetime import datetime
+from imaplib import IMAP4_SSL
+
 import slack
+
 
 def send_messages_to_slack(msg):
     log.basicConfig(level=log.DEBUG)
@@ -13,11 +18,11 @@ def send_messages_to_slack(msg):
 
     category = msg["category"]
 
-    if not "body" in msg:
+    if "body" not in msg:
         log.info("ignoring message without body key")
         return
 
-    body = msg["body"][:256] + "..."
+    body = msg["body"]
 
     _from = ""
     if "from" in msg:
@@ -30,7 +35,7 @@ def send_messages_to_slack(msg):
     # convert category map
     SLACK_CATEGORY_MAP = os.environ["SLACK_CATEGORY_MAP"]
     category_map = json.loads(base64.b64decode(SLACK_CATEGORY_MAP))
-    if not category in category_map:
+    if category not in category_map:
         log.info("ignoring not routed category {}".format(category))
         return
 
@@ -52,6 +57,7 @@ def send_messages_to_slack(msg):
             text=slack_message)
 
         assert response["ok"]
+
 
 def run(*args):
     log.basicConfig(level=log.DEBUG)
@@ -95,7 +101,7 @@ def run(*args):
             msg = message.get_payload()
             while type(msg) == list:
                 temp = msg[0].get_payload(decode=True)
-                if temp == None:
+                if temp is None:
                     msg = msg[0].get_payload()
                 else:
                     msg = temp
@@ -105,17 +111,17 @@ def run(*args):
             body = message.get_payload(decode=True).decode("utf-8")
 
         # if successful extract body
-        if body != None and body != "":
-            cleanhtml = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
-            body = re.sub(cleanhtml, '', body)
+        if body is not None and body != "":
+            clean_html = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
+            body = re.sub(clean_html, '', body)
             email_message = {
-                    "id": num,
-                    "message_id": message.get("Message-Id"),
-                    "from": message.get("From"),
-                    "subject": message.get("Subject"),
-                    "date": date,
-                    "body": body,
-                    "category": "misc",
+                "id": num,
+                "message_id": message.get("Message-Id"),
+                "from": message.get("From"),
+                "subject": message.get("Subject"),
+                "date": date,
+                "body": body,
+                "category": "misc",
             }
 
             # category
@@ -134,6 +140,7 @@ def run(*args):
 
     server.close()
     server.logout()
+
 
 if __name__ == "__main__":
     run()
